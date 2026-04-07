@@ -45,9 +45,6 @@ stock_predictor/
 
 ## Replacing Simulated Model with Real TensorFlow CNN+LSTM
 
-In `app.py`, replace the `_simulate_model_train` and `predict_next_n` methods
-with the real TensorFlow implementation below:
-
 ```python
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
