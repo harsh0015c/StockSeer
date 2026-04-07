@@ -153,8 +153,6 @@ class CNNLSTMPredictor:
 
 ## Real-time Data (yfinance)
 
-In `app.py`, replace `generate_price_history` and `get_live_price` with:
-
 ```python
 import yfinance as yf
 
@@ -171,20 +169,7 @@ def generate_price_history(ticker, days=365):
         "ticker": ticker
     }
 
-def get_live_price(ticker):
-    info = yf.Ticker(ticker).fast_info
-    price = round(info.last_price, 2)
-    prev  = round(info.previous_close, 2)
-    chg   = round(price - prev, 2)
-    pct   = round(chg / prev * 100, 2)
-    return {
-        "ticker": ticker, "price": price,
-        "change": chg, "change_pct": pct,
-        "volume": int(info.three_month_average_volume or 0),
-        "timestamp": datetime.now().strftime("%H:%M:%S"),
-        "high": round(info.day_high, 2),
-        "low": round(info.day_low, 2)
-    }
+
 ```
 
 ---
