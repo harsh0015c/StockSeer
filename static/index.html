@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockSeer — CNN+LSTM Predictor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1525;
+    --bg3: #151d30;
+    --card: #111827;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #f0f4ff;
+    --text2: #8892b0;
+    --text3: #4a5568;
+    --accent: #3b82f6;
+    --accent2: #60a5fa;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --purple: #8b5cf6;
+    --teal: #14b8a6;
+    --glow: rgba(59,130,246,0.15);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:var(--bg2); }
+  ::-webkit-scrollbar-thumb { background:var(--bg3); border-radius:3px; }
+
+  /* ── AUTH SCREEN ── */
+  #auth-screen {
+    position:fixed; inset:0; background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; transition:opacity 0.5s;
+  }
+  #auth-screen.hidden { opacity:0; pointer-events:none; }
+  .auth-card {
+    background:var(--card);
+    border:1px solid var(--border2);
+    border-radius:20px;
+    padding:44px 48px;
+    width:420px;
+    box-shadow:0 0 80px rgba(59,130,246,0.08);
+  }
+  .auth-logo {
+    font-size:13px; font-weight:600; letter-spacing:3px;
+    color:var(--accent2); text-transform:uppercase; margin-bottom:8px;
+  }
+  .auth-title { font-size:28px; font-weight:700; margin-bottom:6px; }
+  .auth-sub { color:var(--text2); font-size:14px; margin-bottom:32px; }
+  .form-group { margin-bottom:18px; }
+  .form-group label { font-size:12px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text2); display:block; margin-bottom:8px; }
+  .form-group input {
+    width:100%; background:var(--bg2); border:1px solid var(--border2);
+    border-radius:10px; padding:12px 16px; color:var(--text);
+    font-family:inherit; font-size:15px; transition:border-color 0.2s;
+    outline:none;
+  }
+  .form-group input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--glow); }
+  .btn-primary {
+    width:100%; background:var(--accent); color:#fff; font-family:inherit;
+    font-size:15px; font-weight:600; padding:13px; border:none;
+    border-radius:10px; cursor:pointer; transition:all 0.2s;
+    letter-spacing:0.5px;
+  }
+  .btn-primary:hover { background:#2563eb; transform:translateY(-1px); }
+  .auth-switch { text-align:center; margin-top:20px; font-size:14px; color:var(--text2); }
+  .auth-switch a { color:var(--accent2); cursor:pointer; text-decoration:none; }
+  .auth-switch a:hover { text-decoration:underline; }
+  .auth-error { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
+    color:#fca5a5; border-radius:8px; padding:10px 14px; font-size:13px;
+    margin-bottom:16px; display:none; }
+
+  /* ── APP LAYOUT ── */
+  #app { display:none; }
+  .sidebar {
+    position:fixed; left:0; top:0; bottom:0; width:240px;
+    background:var(--bg2); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; z-index:100; overflow-y:auto;
+  }
+  .sidebar-logo {
+    padding:24px 20px 20px;
+    border-bottom:1px solid var(--border);
+  }
+  .sidebar-logo .brand { font-size:18px; font-weight:700; color:var(--text); }
+  .sidebar-logo .brand span { color:var(--accent2); }
+  .sidebar-logo .version { font-size:11px; color:var(--text3); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+  .nav-section { padding:16px 12px 8px; font-size:10px; font-weight:700;
+    letter-spacing:2px; text-transform:uppercase; color:var(--text3); }
+  .nav-item {
+    display:flex; align-items:center; gap:10px; padding:10px 16px;
+    margin:2px 8px; border-radius:8px; cursor:pointer; font-size:14px;
+    font-weight:500; color:var(--text2); transition:all 0.15s;
+  }
+  .nav-item:hover { background:var(--bg3); color:var(--text); }
+  .nav-item.active { background:rgba(59,130,246,0.15); color:var(--accent2); }
+  .nav-item .icon { font-size:16px; width:20px; text-align:center; }
+  .sidebar-user {
+    margin-top:auto; padding:16px; border-top:1px solid var(--border);
+  }
+  .user-info { display:flex; align-items:center; gap:10px; }
+  .avatar {
+    width:34px; height:34px; border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--purple));
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; flex-shrink:0;
+  }
+  .user-name { font-size:13px; font-weight:600; }
+  .user-role { font-size:11px; color:var(--text3); }
+  .btn-logout {
+    margin-top:10px; width:100%; background:transparent;
+    border:1px solid var(--border2); color:var(--text2);
+    padding:7px; border-radius:7px; cursor:pointer;
+    font-family:inherit; font-size:12px; transition:all 0.15s;
+  }
+  .btn-logout:hover { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4); color:#fca5a5; }
+
+  .main-content { margin-left:240px; min-height:100vh; background:var(--bg); }
+  .topbar {
+    background:var(--bg2); border-bottom:1px solid var(--border);
+    padding:16px 28px; display:flex; align-items:center;
+    justify-content:space-between; position:sticky; top:0; z-index:50;
+  }
+  .page-title { font-size:18px; font-weight:700; }
+  .page-subtitle { font-size:12px; color:var(--text2); margin-top:2px; }
+  .live-badge {
+    display:flex; align-items:center; gap:7px; font-size:12px;
+    color:var(--green); font-weight:600; font-family:'JetBrains Mono',monospace;
+  }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:var(--green);
+    animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .content { padding:28px; }
+
+  /* ── PANELS ── */
+  .panel { display:none; }
+  .panel.active { display:block; }
+
+  /* ── CARDS ── */
+  .card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:20px 24px;
+  }
+  .card-title { font-size:13px; font-weight:600; letter-spacing:0.5px;
+    color:var(--text2); text-transform:uppercase; margin-bottom:16px; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+
+  /* ── METRIC CARDS ── */
+  .metric-card {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:12px; padding:16px 20px;
+  }
+  .metric-label { font-size:11px; color:var(--text3); letter-spacing:1px;
+    text-transform:uppercase; margin-bottom:6px; }
+  .metric-value { font-size:24px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+  .metric-change { font-size:12px; margin-top:4px; }
+  .up { color:var(--green); }
+  .down { color:var(--red); }
+
+  /* ── SELECT INPUTS ── */
+  select {
+    background:var(--bg2); border:1px solid var(--border2); color:var(--text);
+    padding:9px 14px; border-radius:8px; font-family:inherit; font-size:14px;
+    cursor:pointer; outline:none;
+  }
+  select:focus { border-color:var(--accent); }
+  .btn-action {
+    background:var(--accent); color:#fff; border:none;
+    padding:9px 20px; border-radius:8px; font-family:inherit;
+    font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s;
+  }
+  .btn-action:hover { background:#2563eb; }
+  .btn-ghost {
+    background:transparent; color:var(--text2); border:1px solid var(--border2);
+    padding:9px 16px; border-radius:8px; font-family:inherit;
+    font-size:14px; cursor:pointer; transition:all 0.15s;
+  }
+  .btn-ghost:hover { background:var(--bg3); color:var(--text); }
+  .btn-ghost.active { background:rgba(59,130,246,0.15); color:var(--accent2); border-color:rgba(59,130,246,0.3); }
+
+  .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+
+  /* ── CHART CONTAINERS ── */
+  .chart-wrap { position:relative; width:100%; }
+  .chart-wrap canvas { display:block; }
+
+  /* ── METRICS TABLE ── */
+  .metrics-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:16px; }
+  .m-box { background:var(--bg2); border-radius:10px; padding:12px 14px;
+    border:1px solid var(--border); }
+  .m-box .m-label { font-size:10px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+  .m-box .m-val { font-size:20px; font-weight:700; font-family:'JetBrains Mono',monospace; margin-top:4px; color:var(--accent2); }
+
+  /* ── COMPARE PANEL ── */
+  .compare-row { display:flex; gap:14px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+  .compare-label { font-size:12px; color:var(--text2); font-weight:600; }
+  .stock-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 12px; border-radius:20px; font-size:12px; font-weight:700;
+  }
+  .s1-badge { background:rgba(59,130,246,0.15); color:var(--accent2); border:1px solid rgba(59,130,246,0.3); }
+  .s2-badge { background:rgba(139,92,246,0.15); color:#a78bfa; border:1px solid rgba(139,92,246,0.3); }
+
+  /* ── LOADING ── */
+  .loading-overlay {
+    position:absolute; inset:0; background:rgba(10,14,26,0.8);
+    display:flex; align-items:center; justify-content:center;
+    border-radius:14px; z-index:10; display:none;
+  }
+  .spinner {
+    width:32px; height:32px; border:3px solid var(--border2);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast {
+    position:fixed; bottom:24px; right:24px;
+    background:var(--card); border:1px solid var(--border2);
+    border-radius:10px; padding:12px 20px; font-size:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.3); z-index:9999;
+    transform:translateY(20px); opacity:0; transition:all 0.3s; pointer-events:none;
+  }
+  #toast.show { transform:translateY(0); opacity:1; }
+
+  /* ── RESPONSIVE ── */
+  @media(max-width:1100px) {
+    .grid-4 { grid-template-columns:repeat(2,1fr); }
+    .metrics-grid { grid-template-columns:repeat(3,1fr); }
+  }
+  @media(max-width:768px) {
+    .sidebar { width:200px; }
+    .main-content { margin-left:200px; }
+    .grid-2 { grid-template-columns:1fr; }
+    .grid-3 { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══════════════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div id="login-form">
+      <div class="auth-logo">StockSeer AI</div>
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to access your prediction dashboard</div>
+      <div class="auth-error" id="login-error"></div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="login-user" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Sign In →</button>
+      <div class="auth-switch">Don't have an account? <a onclick="showRegister()">Create one</a></div>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text3);">
+        Default: <span style="font-family:'JetBrains Mono',monospace;color:var(--text2)">admin / admin123</span>
+      </div>
+    </div>
+    <div id="register-form" style="display:none;">
+      <div class="auth-logo">StockSeer AI</div>
+      <div class="auth-title">Create account</div>
+      <div class="auth-sub">Join to start predicting stock movements</div>
+      <div class="auth-error" id="reg-error"></div>
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="Your name">
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="reg-user" placeholder="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-pass" placeholder="Min. 6 characters">
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Create Account →</button>
+      <div class="auth-switch"><a onclick="showLogin()">← Back to sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══════════════════════════════════════════════════════════════ -->
+<div id="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">Stock<span>Seer</span></div>
+      <div class="version">CNN+LSTM v2.0</div>
+    </div>
+    <div class="nav-section">Navigation</div>
+    <div class="nav-item active" onclick="showPanel('dashboard')">
+      <span class="icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showPanel('predict')">
+      <span class="icon">🔮</span> Predict
+    </div>
+    <div class="nav-item" onclick="showPanel('compare')">
+      <span class="icon">⚖️</span> Compare Stocks
+    </div>
+    <div class="nav-item" onclick="showPanel('indicators')">
+      <span class="icon">📈</span> Indicators
+    </div>
+    <div class="nav-item" onclick="showPanel('model')">
+      <span class="icon">🧠</span> Model Info
+    </div>
+    <div class="sidebar-user">
+      <div class="user-info">
+        <div class="avatar" id="user-avatar">A</div>
+        <div>
+          <div class="user-name" id="user-name-display">Admin</div>
+          <div class="user-role">Analyst</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-subtitle" id="page-subtitle">Real-time market overview</div>
+      </div>
+      <div class="live-badge">
+        <div class="live-dot"></div> LIVE DATA
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div class="panel active" id="panel-dashboard">
+        <div class="grid-4" id="ticker-cards" style="margin-bottom:20px;"></div>
+        <div class="grid-2" style="margin-bottom:20px;">
+          <div class="card" style="position:relative;">
+            <div class="card-title">Price History</div>
+            <div class="toolbar">
+              <select id="dash-ticker" onchange="loadDashChart()">
+                <option>AAPL</option><option>GOOGL</option><option>MSFT</option>
+                <option>TSLA</option><option>NVDA</option><option>META</option>
+              </select>
+              <button class="btn-ghost active" id="btn90" onclick="setDays(90,this)">90d</button>
+              <button class="btn-ghost" id="btn180" onclick="setDays(180,this)">180d</button>
+              <button class="btn-ghost" id="btn365" onclick="setDays(365,this)">1Y</button>
+            </div>
+            <div class="chart-wrap" style="height:260px;">
+              <canvas id="dashChart"></canvas>
+            </div>
+            <div class="loading-overlay" id="dash-loading"><div class="spinner"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Volume</div>
+            <div class="chart-wrap" style="height:310px;">
+              <canvas id="volChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PREDICT ══ -->
+      <div class="panel" id="panel-predict">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="toolbar">
+            <div style="font-size:14px;font-weight:600;color:var(--text2);margin-right:4px;">Ticker:</div>
+            <select id="pred-ticker">
+              <option>AAPL</option><option>GOOGL</option><option>MSFT</option>
+              <option>TSLA</option><option>AMZN</option><option>NVDA</option>
+              <option>META</option><option>NFLX</option><option>TCS.NS</option>
+              <option>INFY</option><option>RELIANCE.NS</option><option>HDFC.NS</option>
+            </select>
+            <div style="font-size:14px;font-weight:600;color:var(--text2);margin-left:8px;">Horizon:</div>
+            <select id="pred-days">
+              <option value="7">7 days</option>
+              <option value="14">14 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="60">60 days</option>
+            </select>
+            <button class="btn-action" onclick="runPrediction()">Run CNN+LSTM →</button>
+          </div>
+        </div>
+        <div class="card" style="position:relative;margin-bottom:16px;">
+          <div class="card-title" id="pred-chart-title">Prediction Chart</div>
+          <div class="chart-wrap" style="height:340px;">
+            <canvas id="predChart"></canvas>
+          </div>
+          <div class="loading-overlay" id="pred-loading"><div class="spinner"></div></div>
+        </div>
+        <div class="metrics-grid" id="pred-metrics">
+          <div class="m-box"><div class="m-label">MAE</div><div class="m-val" id="m-mae">—</div></div>
+          <div class="m-box"><div class="m-label">RMSE</div><div class="m-val" id="m-rmse">—</div></div>
+          <div class="m-box"><div class="m-label">MAPE %</div><div class="m-val" id="m-mape">—</div></div>
+          <div class="m-box"><div class="m-label">R²</div><div class="m-val" id="m-r2">—</div></div>
+          <div class="m-box"><div class="m-label">Dir. Acc %</div><div class="m-val" id="m-dir">—</div></div>
+        </div>
+      </div>
+
+      <!-- ══ COMPARE ══ -->
+      <div class="panel" id="panel-compare">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="compare-row">
+            <span class="compare-label">Stock 1:</span>
+            <select id="cmp1">
+              <option>AAPL</option><option>GOOGL</option><option>MSFT</option>
+              <option>TSLA</option><option>NVDA</option><option>AMZN</option>
+              <option>META</option><option>NFLX</option>
+            </select>
+            <span class="compare-label">Stock 2:</span>
+            <select id="cmp2">
+              <option>GOOGL</option><option>AAPL</option><option>MSFT</option>
+              <option>TSLA</option><option>NVDA</option><option>AMZN</option>
+              <option>META</option><option>NFLX</option>
+            </select>
+            <select id="cmp-days">
+              <option value="30">30 days</option>
+              <option value="90" selected>90 days</option>
+              <option value="180">180 days</option>
+            </select>
+            <button class="btn-action" onclick="runCompare()">Compare →</button>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="card" id="cmp-card1">
+            <div class="card-title">Stock 1 — Actual + Prediction</div>
+            <div class="chart-wrap" style="height:260px;">
+              <canvas id="cmpChart1"></canvas>
+            </div>
+          </div>
+          <div class="card" id="cmp-card2">
+            <div class="card-title">Stock 2 — Actual + Prediction</div>
+            <div class="chart-wrap" style="height:260px;">
+              <canvas id="cmpChart2"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="position:relative;">
+          <div class="card-title">Normalized Performance Comparison (Base=100)</div>
+          <div class="chart-wrap" style="height:280px;">
+            <canvas id="normChart"></canvas>
+          </div>
+          <div class="loading-overlay" id="cmp-loading"><div class="spinner"></div></div>
+        </div>
+        <div class="grid-2" style="margin-top:16px;" id="cmp-stats"></div>
+      </div>
+
+      <!-- ══ INDICATORS ══ -->
+      <div class="panel" id="panel-indicators">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="toolbar">
+            <select id="ind-ticker" onchange="loadIndicators()">
+              <option>AAPL</option><option>GOOGL</option><option>MSFT</option>
+              <option>TSLA</option><option>NVDA</option><option>META</option>
+            </select>
+            <span style="font-size:13px;color:var(--text2);">Technical Indicators</span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-title">Price + Bollinger Bands + Moving Averages</div>
+          <div class="chart-wrap" style="height:300px;">
+            <canvas id="bbChart"></canvas>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">RSI (14)</div>
+            <div class="chart-wrap" style="height:200px;">
+              <canvas id="rsiChart"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Volume</div>
+            <div class="chart-wrap" style="height:200px;">
+              <canvas id="indVolChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ MODEL INFO ══ -->
+      <div class="panel" id="panel-model">
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-title">Model Architecture</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;color:var(--text2);">
+              <div style="color:var(--accent2);font-weight:600;">Sequential CNN+LSTM</div>
+              <div>├─ Conv1D(64, kernel=3, relu)</div>
+              <div>├─ Conv1D(64, kernel=3, relu)</div>
+              <div>├─ MaxPooling1D(pool=2)</div>
+              <div>├─ LSTM(128, return_seq=True)</div>
+              <div>├─ Dropout(0.2)</div>
+              <div>├─ LSTM(64)</div>
+              <div>├─ Dropout(0.2)</div>
+              <div>├─ Dense(32, relu)</div>
+              <div>└─ Dense(1) — Price output</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Training Config</div>
+            <table style="width:100%;font-size:13px;border-collapse:collapse;">
+              <tr><td style="color:var(--text3);padding:6px 0;">Sequence length</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">60 days</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Features</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">OHLCV + RSI + BB</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Optimizer</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">Adam (lr=0.001)</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Loss function</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">Huber Loss</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Epochs</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">100 (early stop)</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Train/Val split</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">80 / 20</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Batch size</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">32</td></tr>
+              <tr><td style="color:var(--text3);padding:6px 0;">Normalization</td><td style="color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;">MinMaxScaler</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">How CNN+LSTM Works</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:8px;">
+            <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:22px;margin-bottom:8px;">📥</div>
+              <div style="font-size:12px;font-weight:600;color:var(--accent2);">Input</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">60-day window of OHLCV + indicators</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:22px;margin-bottom:8px;">🔍</div>
+              <div style="font-size:12px;font-weight:600;color:var(--purple)">CNN Layers</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Extract local patterns: candle shapes, short patterns</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:22px;margin-bottom:8px;">🧠</div>
+              <div style="font-size:12px;font-weight:600;color:var(--teal)">LSTM Layers</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Capture long-term trends and temporal dependencies</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:22px;margin-bottom:8px;">🔗</div>
+              <div style="font-size:12px;font-weight:600;color:var(--yellow)">Dense</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Combine features into final price signal</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:22px;margin-bottom:8px;">📤</div>
+              <div style="font-size:12px;font-weight:600;color:var(--green)">Output</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Next N-day price forecast + confidence band</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main-content -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ══ STATE ══════════════════════════════════════════════════════════════════════
+let dashDays = 90;
+let charts = {};
+let liveInterval = null;
+
+// ══ AUTH ═══════════════════════════════════════════════════════════════════════
+async function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  try {
+    const res = await fetch('/api/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:u, password:p})
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('user-name-display').textContent = data.name;
+      document.getElementById('user-avatar').textContent = data.name[0].toUpperCase();
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app').style.display = 'block';
+      initApp();
+    } else {
+      err.textContent = data.message || 'Invalid credentials';
+      err.style.display = 'block';
+    }
+  } catch(e) { err.textContent = 'Connection error'; err.style.display='block'; }
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const u = document.getElementById('reg-user').value.trim();
+  const p = document.getElementById('reg-pass').value;
+  const err = document.getElementById('reg-error');
+  err.style.display = 'none';
+  try {
+    const res = await fetch('/api/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:u, password:p, name:name||u})
+    });
+    const data = await res.json();
+    if (data.success) { showToast('Account created! Please sign in.'); showLogin(); }
+    else { err.textContent = data.message; err.style.display='block'; }
+  } catch(e) { err.textContent = 'Connection error'; err.style.display='block'; }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', {method:'POST'});
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').classList.remove('hidden');
+  if (liveInterval) clearInterval(liveInterval);
+}
+
+function showRegister() {
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('register-form').style.display='block';
+}
+function showLogin() {
+  document.getElementById('register-form').style.display='none';
+  document.getElementById('login-form').style.display='block';
+}
+
+// ── Enter key on login
+document.addEventListener('DOMContentLoaded', () => {
+  ['login-user','login-pass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  });
+  // Check if already logged in
+  fetch('/api/me').then(r=>r.json()).then(d=>{
+    if(d.logged_in) {
+      document.getElementById('user-name-display').textContent = d.name;
+      document.getElementById('user-avatar').textContent = d.name[0].toUpperCase();
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app').style.display = 'block';
+      initApp();
+    }
+  });
+});
+
+// ══ NAVIGATION ═════════════════════════════════════════════════════════════════
+const panelTitles = {
+  dashboard: ['Dashboard','Real-time market overview'],
+  predict: ['Predict','CNN+LSTM forecast engine'],
+  compare: ['Compare Stocks','Side-by-side real-time comparison'],
+  indicators: ['Technical Indicators','RSI, Bollinger Bands, Moving Averages'],
+  model: ['Model Info','Architecture & training details']
+};
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if(n.textContent.toLowerCase().includes(name.split('-')[0])) n.classList.add('active');
+  });
+  const [title, sub] = panelTitles[name] || [name, ''];
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-subtitle').textContent = sub;
+  if(name==='indicators') loadIndicators();
+}
+
+// ══ CHART HELPERS ══════════════════════════════════════════════════════════════
+const C = { blue:'#3b82f6', purple:'#8b5cf6', green:'#10b981', red:'#ef4444',
+  yellow:'#f59e0b', teal:'#14b8a6', grid:'rgba(255,255,255,0.05)', text:'#8892b0' };
+
+Chart.defaults.color = C.text;
+Chart.defaults.borderColor = C.grid;
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function makeLineChart(canvasId, datasets, labels, opts={}) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  charts[canvasId] = new Chart(ctx, {
+    type:'line',
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:600},
+      plugins: { legend:{ display: opts.legend!==false,
+        labels:{boxWidth:10,padding:16,color:C.text} }, tooltip:{mode:'index',intersect:false} },
+      scales: {
+        x: { grid:{color:C.grid}, ticks:{maxTicksLimit:8,color:C.text},
+          ...opts.xScale },
+        y: { grid:{color:C.grid}, ticks:{color:C.text, callback: v=>'$'+v.toLocaleString()},
+          ...opts.yScale }
+      },
+      ...opts.extra
+    }
+  });
+  return charts[canvasId];
+}
+
+// ══ INIT APP ═══════════════════════════════════════════════════════════════════
+function initApp() {
+  loadTickerCards();
+  loadDashChart();
+  liveInterval = setInterval(loadTickerCards, 5000);
+}
+
+// ══ DASHBOARD ══════════════════════════════════════════════════════════════════
+async function loadTickerCards() {
+  const tickers = ['AAPL','MSFT','GOOGL','NVDA','TSLA','META','AMZN','NFLX'];
+  const container = document.getElementById('ticker-cards');
+  const prices = await Promise.all(tickers.map(t => fetch(`/api/stocks/${t}/live`).then(r=>r.json())));
+  container.innerHTML = prices.map(p => `
+    <div class="metric-card">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div class="metric-label">${p.ticker}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace">${p.timestamp}</div>
+      </div>
+      <div class="metric-value" style="font-size:20px;">$${p.price.toLocaleString()}</div>
+      <div class="metric-change ${p.change>=0?'up':'down'}">
+        ${p.change>=0?'▲':'▼'} $${Math.abs(p.change)} (${p.change_pct}%)
+      </div>
+    </div>`).join('');
+}
+
+async function loadDashChart() {
+  const ticker = document.getElementById('dash-ticker').value;
+  document.getElementById('dash-loading').style.display = 'flex';
+  const data = await fetch(`/api/stocks/${ticker}/history?days=${dashDays}`).then(r=>r.json());
+  document.getElementById('dash-loading').style.display = 'none';
+  // every 5th label
+  const labels = data.dates.map((d,i) => i%5===0?d:'');
+  makeLineChart('dashChart', [{
+    label: ticker, data: data.close, borderColor: C.blue,
+    backgroundColor:'rgba(59,130,246,0.08)', tension:0.3,
+    borderWidth:2, pointRadius:0, fill:true
+  }], data.dates, { legend:false });
+
+  destroyChart('volChart');
+  const ctx2 = document.getElementById('volChart').getContext('2d');
+  charts['volChart'] = new Chart(ctx2, {
+    type:'bar',
+    data: { labels: data.dates, datasets:[{
+      label:'Volume', data: data.volume,
+      backgroundColor:'rgba(139,92,246,0.5)', borderColor:'#8b5cf6', borderWidth:0
+    }]},
+    options: { responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{display:false},ticks:{maxTicksLimit:8,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>(v/1e6).toFixed(1)+'M'}}
+      }
+    }
+  });
+}
+
+function setDays(d, el) {
+  dashDays = d;
+  document.querySelectorAll('[id^=btn]').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  loadDashChart();
+}
+
+// ══ PREDICT ════════════════════════════════════════════════════════════════════
+async function runPrediction() {
+  const ticker = document.getElementById('pred-ticker').value;
+  const days = document.getElementById('pred-days').value;
+  document.getElementById('pred-loading').style.display = 'flex';
+  document.getElementById('pred-chart-title').textContent = `${ticker} — CNN+LSTM ${days}-day Forecast`;
+
+  const [hist, pred] = await Promise.all([
+    fetch(`/api/stocks/${ticker}/history?days=90`).then(r=>r.json()),
+    fetch(`/api/stocks/${ticker}/predict?days=${days}`).then(r=>r.json())
+  ]);
+  document.getElementById('pred-loading').style.display = 'none';
+
+  const histDates = hist.dates.slice(-60);
+  const histPrices = hist.close.slice(-60);
+  const allDates = [...histDates, ...pred.dates];
+
+  const actualData = [...histPrices, ...Array(pred.dates.length).fill(null)];
+  const predData = [...Array(histDates.length-1).fill(null), histPrices[histPrices.length-1], ...pred.predictions];
+  const upperData = [...Array(histDates.length-1).fill(null), histPrices[histPrices.length-1], ...pred.confidence_upper];
+  const lowerData = [...Array(histDates.length-1).fill(null), histPrices[histPrices.length-1], ...pred.confidence_lower];
+
+  destroyChart('predChart');
+  const ctx = document.getElementById('predChart').getContext('2d');
+  charts['predChart'] = new Chart(ctx, {
+    type:'line',
+    data: { labels: allDates, datasets:[
+      { label:'Actual', data:actualData, borderColor:C.blue, borderWidth:2.5,
+        backgroundColor:'rgba(59,130,246,0.06)', tension:0.3, pointRadius:0, fill:true },
+      { label:'CNN+LSTM Forecast', data:predData, borderColor:C.green, borderWidth:2.5,
+        borderDash:[], tension:0.3, pointRadius:0, fill:false },
+      { label:'Upper CI', data:upperData, borderColor:'rgba(16,185,129,0.3)',
+        borderWidth:1, tension:0.3, pointRadius:0, fill:false, borderDash:[4,4] },
+      { label:'Lower CI', data:lowerData, borderColor:'rgba(16,185,129,0.3)',
+        borderWidth:1, tension:0.3, pointRadius:0, fill:'-1',
+        backgroundColor:'rgba(16,185,129,0.06)', borderDash:[4,4] }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{boxWidth:10,padding:16,color:C.text}},
+        tooltip:{mode:'index',intersect:false}},
+      scales:{
+        x:{grid:{color:C.grid},ticks:{maxTicksLimit:10,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>'$'+v.toLocaleString()}}
+      }
+    }
+  });
+
+  const m = pred.metrics;
+  document.getElementById('m-mae').textContent = m.mae;
+  document.getElementById('m-rmse').textContent = m.rmse;
+  document.getElementById('m-mape').textContent = m.mape+'%';
+  document.getElementById('m-r2').textContent = m.r2;
+  document.getElementById('m-dir').textContent = m.directional_accuracy+'%';
+  showToast(`✓ ${ticker} forecast complete — ${days} days predicted`);
+}
+
+// ══ COMPARE ════════════════════════════════════════════════════════════════════
+async function runCompare() {
+  const t1 = document.getElementById('cmp1').value;
+  const t2 = document.getElementById('cmp2').value;
+  const days = document.getElementById('cmp-days').value;
+  document.getElementById('cmp-loading').style.display = 'flex';
+
+  const [cmp, pred1, pred2] = await Promise.all([
+    fetch(`/api/stocks/compare?t1=${t1}&t2=${t2}&days=${days}`).then(r=>r.json()),
+    fetch(`/api/stocks/${t1}/predict?days=15`).then(r=>r.json()),
+    fetch(`/api/stocks/${t2}/predict?days=15`).then(r=>r.json()),
+  ]);
+  document.getElementById('cmp-loading').style.display = 'none';
+
+  // Chart 1 — t1 actual + prediction
+  const allDates1 = [...cmp.stock1.dates, ...pred1.dates];
+  const actual1 = [...cmp.stock1.prices, ...Array(pred1.dates.length).fill(null)];
+  const future1 = [...Array(cmp.stock1.prices.length-1).fill(null), cmp.stock1.prices.at(-1), ...pred1.predictions];
+  destroyChart('cmpChart1');
+  new Chart(document.getElementById('cmpChart1').getContext('2d'), {
+    type:'line', data:{labels:allDates1, datasets:[
+      {label:'Actual',data:actual1,borderColor:C.blue,borderWidth:2,pointRadius:0,fill:false,tension:0.3},
+      {label:'Forecast',data:future1,borderColor:C.green,borderWidth:2,pointRadius:0,fill:false,tension:0.3,borderDash:[6,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:8,padding:12,color:C.text}}},
+      scales:{x:{grid:{color:C.grid},ticks:{maxTicksLimit:6,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>'$'+v.toFixed(0)}}}}
+  });
+  document.getElementById('cmp-card1').querySelector('.card-title').textContent = `${t1} — ${cmp.stock1.name}`;
+
+  // Chart 2 — t2 actual + prediction
+  const allDates2 = [...cmp.stock2.dates, ...pred2.dates];
+  const actual2 = [...cmp.stock2.prices, ...Array(pred2.dates.length).fill(null)];
+  const future2 = [...Array(cmp.stock2.prices.length-1).fill(null), cmp.stock2.prices.at(-1), ...pred2.predictions];
+  destroyChart('cmpChart2');
+  new Chart(document.getElementById('cmpChart2').getContext('2d'), {
+    type:'line', data:{labels:allDates2, datasets:[
+      {label:'Actual',data:actual2,borderColor:C.purple,borderWidth:2,pointRadius:0,fill:false,tension:0.3},
+      {label:'Forecast',data:future2,borderColor:C.yellow,borderWidth:2,pointRadius:0,fill:false,tension:0.3,borderDash:[6,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:8,padding:12,color:C.text}}},
+      scales:{x:{grid:{color:C.grid},ticks:{maxTicksLimit:6,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>'$'+v.toFixed(0)}}}}
+  });
+  document.getElementById('cmp-card2').querySelector('.card-title').textContent = `${t2} — ${cmp.stock2.name}`;
+
+  // Normalized chart
+  destroyChart('normChart');
+  new Chart(document.getElementById('normChart').getContext('2d'), {
+    type:'line', data:{labels:cmp.stock1.dates, datasets:[
+      {label:t1+' (normalized)',data:cmp.stock1.normalized,borderColor:C.blue,borderWidth:2.5,pointRadius:0,fill:false,tension:0.3},
+      {label:t2+' (normalized)',data:cmp.stock2.normalized,borderColor:C.purple,borderWidth:2.5,pointRadius:0,fill:false,tension:0.3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,padding:16,color:C.text}},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{grid:{color:C.grid},ticks:{maxTicksLimit:8,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>v.toFixed(1)}}}}
+  });
+
+  // Stats
+  function pctChange(arr) { return ((arr.at(-1)-arr[0])/arr[0]*100).toFixed(2); }
+  function maxDD(arr) {
+    let peak=arr[0],dd=0;
+    arr.forEach(v=>{if(v>peak)peak=v;dd=Math.min(dd,(v-peak)/peak*100);});
+    return dd.toFixed(2);
+  }
+  const stats = document.getElementById('cmp-stats');
+  [[t1,cmp.stock1,C.blue,pred1],[t2,cmp.stock2,C.purple,pred2]].forEach(([t,s,col,pr])=>{
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `<div class="card-title" style="color:${col}">${t} — ${s.name}</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <tr><td style="color:var(--text3);padding:6px 0;">Period Return</td><td style="text-align:right;color:${pctChange(s.prices)>0?'var(--green)':'var(--red)'};">${pctChange(s.prices)}%</td></tr>
+        <tr><td style="color:var(--text3);padding:6px 0;">Current Price</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;">$${s.prices.at(-1).toFixed(2)}</td></tr>
+        <tr><td style="color:var(--text3);padding:6px 0;">Max Drawdown</td><td style="text-align:right;color:var(--red);">${maxDD(s.prices)}%</td></tr>
+        <tr><td style="color:var(--text3);padding:6px 0;">15d Forecast</td><td style="text-align:right;color:var(--green);">$${pr.predictions.at(-1).toFixed(2)}</td></tr>
+        <tr><td style="color:var(--text3);padding:6px 0;">Model R²</td><td style="text-align:right;color:var(--accent2);">${pr.metrics.r2}</td></tr>
+      </table>`;
+    stats.appendChild(div);
+  });
+  showToast(`✓ Comparison: ${t1} vs ${t2} loaded`);
+}
+
+// ══ INDICATORS ═════════════════════════════════════════════════════════════════
+async function loadIndicators() {
+  const ticker = document.getElementById('ind-ticker').value;
+  const data = await fetch(`/api/stocks/${ticker}/indicators`).then(r=>r.json());
+
+  // Bollinger + MA
+  destroyChart('bbChart');
+  new Chart(document.getElementById('bbChart').getContext('2d'), {
+    type:'line', data:{labels:data.dates, datasets:[
+      {label:'Price',data:data.close,borderColor:C.blue,borderWidth:2,pointRadius:0,fill:false,tension:0.3,order:1},
+      {label:'SMA 20',data:data.sma20,borderColor:C.yellow,borderWidth:1.5,pointRadius:0,fill:false,tension:0.3},
+      {label:'SMA 50',data:data.sma50,borderColor:C.teal,borderWidth:1.5,pointRadius:0,fill:false,tension:0.3},
+      {label:'BB Upper',data:data.bb_upper,borderColor:'rgba(139,92,246,0.5)',borderWidth:1,pointRadius:0,fill:false,tension:0.3,borderDash:[3,3]},
+      {label:'BB Lower',data:data.bb_lower,borderColor:'rgba(139,92,246,0.5)',borderWidth:1,pointRadius:0,fill:'-1',backgroundColor:'rgba(139,92,246,0.05)',tension:0.3,borderDash:[3,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:8,padding:12,color:C.text}},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{grid:{color:C.grid},ticks:{maxTicksLimit:10,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>'$'+v.toFixed(0)}}}}
+  });
+
+  // RSI
+  destroyChart('rsiChart');
+  new Chart(document.getElementById('rsiChart').getContext('2d'), {
+    type:'line', data:{labels:data.dates, datasets:[
+      {label:'RSI',data:data.rsi,borderColor:C.purple,borderWidth:2,pointRadius:0,fill:false,tension:0.3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false},
+        annotation:{annotations:{
+          ob:{type:'line',yMin:70,yMax:70,borderColor:'rgba(239,68,68,0.5)',borderWidth:1,borderDash:[4,4]},
+          os:{type:'line',yMin:30,yMax:30,borderColor:'rgba(16,185,129,0.5)',borderWidth:1,borderDash:[4,4]}
+        }}},
+      scales:{x:{grid:{color:C.grid},ticks:{maxTicksLimit:8,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text},min:0,max:100,
+          afterBuildTicks:axis=>{axis.ticks=[{value:0},{value:30},{value:70},{value:100}];}
+        }}}
+  });
+
+  // Volume
+  destroyChart('indVolChart');
+  new Chart(document.getElementById('indVolChart').getContext('2d'), {
+    type:'bar', data:{labels:data.dates, datasets:[
+      {label:'Volume',data:data.volume,backgroundColor:'rgba(20,184,166,0.5)',borderWidth:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{maxTicksLimit:8,color:C.text}},
+        y:{grid:{color:C.grid},ticks:{color:C.text,callback:v=>(v/1e6).toFixed(0)+'M'}}}}
+  });
+}
+
+// ══ TOAST ══════════════════════════════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
