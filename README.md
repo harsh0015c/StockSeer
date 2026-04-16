@@ -181,3 +181,6 @@ def generate_price_history(ticker, days=365):
 | Comparison | Normalized 100-base chart + individual forecasts |
 | Live updates | Auto-refreshes ticker prices every 5 seconds |
 | Confidence | Expanding CI bands (wider further in future) |
+
+created by harshchaudhary
+
