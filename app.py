@@ -1,14 +1,3 @@
-"""
-StockSeer — Real CNN+LSTM Stock Price Prediction System
-Matches the project report exactly:
-  - Real TensorFlow/Keras CNN+LSTM model
-  - Real yfinance data (OHLCV + technical indicators)
-  - Actual RMSE / MAE / MAPE / Directional Accuracy metrics
-  - MinMaxScaler normalisation
-  - 80/20 train/test split
-  - Model persistence (.h5 files)
-  - Background training so the API stays responsive
-"""
 
 from flask import Flask, request, jsonify, send_from_directory, session
 import numpy as np
@@ -71,14 +60,7 @@ _train_lock   = threading.Lock()
 
 
 def _build_cnnlstm(seq_len: int, n_features: int = 1):
-    """
-    Architecture from report (Module 2 / Chapter 5):
-      Conv1D(64,3,relu) → Conv1D(64,3,relu) → MaxPool(2)
-      → LSTM(128,return_seq=True) → Dropout(0.2)
-      → LSTM(64) → Dropout(0.2)
-      → Dense(32,relu) → Dense(1)
-    Compiled with Adam(lr=0.001) + Huber loss.
-    """
+
     model = Sequential([
         Conv1D(64, 3, activation='relu', input_shape=(seq_len, n_features)),
         Conv1D(64, 3, activation='relu'),
@@ -126,15 +108,7 @@ def _compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict:
 
 
 def _train_and_cache(ticker: str, prices: list):
-    """
-    Runs in a background thread.
-    1. Normalise (MinMaxScaler)
-    2. Build sequences (SEQ_LEN=60)
-    3. 80/20 split
-    4. Build CNN+LSTM, train with EarlyStopping + ReduceLROnPlateau
-    5. Evaluate on test set → real metrics
-    6. Save model + scaler to disk
-    """
+
     with _train_lock:
         _train_status[ticker] = {"status": "training", "metrics": None}
 
@@ -208,10 +182,7 @@ def _get_model_and_scaler(ticker: str):
 
 
 def predict_next_n(ticker: str, prices: list, n_days: int = 30):
-    """
-    Returns (predictions, conf_upper, conf_lower) using the trained model.
-    If model not ready, triggers training in background and returns None.
-    """
+
     model, scaler = _get_model_and_scaler(ticker)
 
     # Not cached yet — check if training in progress
